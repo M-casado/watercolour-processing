@@ -1,0 +1,21 @@
+# Ignore raw data files and large image formats
+data/raw/
+*.NEF
+*.RAW
+
+# Ignore processed images
+data/processed/
+*.PNG
+*.TIFF
+
+# Ignore Python cache and temporary files
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore virtual environments
+venv/
+.env/
