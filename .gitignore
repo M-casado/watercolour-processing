@@ -2,6 +2,7 @@
 data/raw/
 *.NEF
 *.RAW
+data/watercolours.db
 
 # Ignore processed images
 data/processed/
