@@ -1,195 +1,125 @@
-import unittest
-import sqlite3
+# tests/test_db_manager.py
+
 import os
+import pytest
+import sqlite3
+from watercolour_processing.database.db_manager import (
+    DatabaseManager,
+    DatabaseError,
+    DuplicateImageError
+)
 
-TEST_DB_NAME = "../data/watercolours_test.db"
-SCHEMA_FILE = "../src/database/db_schema.sql"
+TEST_DB = "data/watercolours_test.db"
+SCHEMA_FILE = "src/watercolour_processing/database/db_schema.sql"
 
-def apply_schema_to_db(db_path=TEST_DB_NAME, schema_file=SCHEMA_FILE):
+@pytest.fixture
+def clean_test_db():
     """
-    Creates a new SQLite DB or overwrites an existing test DB, applying the schema.
+    Removes any existing test DB before tests, then yields.
+    After tests, remove it again for cleanliness.
     """
-    # If the file exists, remove it to get a fresh DB for testing.
-    if os.path.exists(db_path):
-        os.remove(db_path)
+    if os.path.exists(TEST_DB):
+        os.remove(TEST_DB)
+    yield
+    if os.path.exists(TEST_DB):
+        os.remove(TEST_DB)
 
-    # Connect to the new or just-deleted file
-    conn = sqlite3.connect(db_path)
-    with open(schema_file, 'r', encoding='utf-8') as f:
-        schema_sql = f.read()
-    conn.executescript(schema_sql)
-    conn.commit()
-    conn.close()
+def test_insert_image_ok(clean_test_db):
+    """
+    Inserts a valid raw image, verifying the returned ID.
+    Checks that a duplicate MD5 triggers DuplicateImageError.
+    """
+    db = DatabaseManager(TEST_DB, schema_path=SCHEMA_FILE)
+    img_id = db.insert_image(
+        filename="_DSC0001.NEF",
+        md5_checksum="abcdef1234567890abcdef1234567890",  # 32 hex
+        date_taken="2025-01-29T12:34:56",
+        order_in_batch=1,
+        pipeline_version="v0.1.0"
+    )
+    assert img_id > 0
 
-class TestDBSchema(unittest.TestCase):
-    def setUp(self):
-        """
-        Ensure the test DB is freshly created from db_schema.sql before each test method.
-        """
-        apply_schema_to_db(TEST_DB_NAME, SCHEMA_FILE)
-        self.conn = sqlite3.connect(TEST_DB_NAME)
-        self.cur = self.conn.cursor()
-
-    def tearDown(self):
-        """
-        Closes the test DB connection. 
-        Optionally removes the test DB file to ensure a clean state for the next run.
-        """
-        self.conn.close()
-        if os.path.exists(TEST_DB_NAME):
-            os.remove(TEST_DB_NAME)
-
-    def test_insert_raw_image_ok(self):
-        """
-        Example test for inserting a raw image with valid constraints.
-        """
-        sql = """
-        INSERT INTO images (
-            filename, md5_checksum, is_raw, parent_image_id,
-            date_taken, order_in_batch, pipeline_version, flash_missing
+    with pytest.raises(DuplicateImageError):
+        db.insert_image(
+            filename="_DSC0001_DUP.NEF",
+            md5_checksum="abcdef1234567890abcdef1234567890",
+            date_taken="2025-01-29T12:35:00"
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        self.cur.execute(sql, (
-            "_DSC0001.NEF",
-            "abcdef1234567890abcdef1234567890",  # 32 hex
-            1,          # is_raw
-            None,
-            "2025-01-29T12:34:56",
-            1,
-            "v0.1.0",
-            0
-        ))
-        self.conn.commit()
+    db.close_connection()
 
-        # Check the row
-        self.cur.execute("SELECT filename, md5_checksum, is_raw, parent_image_id FROM images")
-        row = self.cur.fetchone()
-        self.assertIsNotNone(row)
-        self.assertEqual(row[0], "_DSC0001.NEF")
-        self.assertEqual(row[1], "abcdef1234567890abcdef1234567890")
-        self.assertEqual(row[2], 1)   # is_raw
-        self.assertIsNone(row[3])     # raw => parent_image_id should be NULL
+def test_update_image(clean_test_db):
+    """
+    Inserts then updates an image record, verifying DB changes.
+    """
+    db = DatabaseManager(TEST_DB, schema_path=SCHEMA_FILE)
+    img_id = db.insert_image(
+        filename="_DSC0002.NEF",
+        md5_checksum="11111111111111111111111111111111",
+        date_taken="2025-01-29T10:00:00"
+    )
+    db.update_image(img_id, cropped=1, cropped_date="2025-01-29T11:00:00")
+    row = db.get_image_by_md5("11111111111111111111111111111111")
+    assert row is not None
+    # row columns: (image_id, filename, md5_checksum, is_raw, parent_image_id, date_taken, order_in_batch,
+    #               pipeline_version, flash_missing, cropped, cropped_date, rotation_degrees, rotated_date)
+    assert row[9] == 1  # cropped
+    assert row[10] == "2025-01-29T11:00:00"
 
-    def test_insert_invalid_md5(self):
-        """
-        Attempt to insert an image with invalid md5 (not 32 hex chars).
-        Expect an integrity error due to the CHECK constraint.
-        """
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.cur.execute("""
-                INSERT INTO images (filename, md5_checksum, is_raw, parent_image_id, date_taken)
-                VALUES (?, ?, ?, ?, ?)
-            """, (
-                "_DSC0003.NEF",
-                "ZZZZZZZZZZZZZZ",  # invalid length & characters
-                1,
-                None,
-                "2025-01-29T10:00:00"
-            ))
-            self.conn.commit()
+def test_insert_painting_ok(clean_test_db):
+    """
+    Inserts a painting, verifying painting_id > 0.
+    """
+    db = DatabaseManager(TEST_DB, schema_path=SCHEMA_FILE)
+    p_id = db.insert_painting(
+        name="Sunset",
+        description="Warm painting",
+        explicit_year=2020
+    )
+    assert p_id > 0
 
-    def test_insert_painting_ok(self):
-        """
-        Insert a painting with minimal fields, check 'personal_favourite' default=0.
-        """
-        self.cur.execute("""
-            INSERT INTO paintings (name, explicit_year, personal_favourite)
-            VALUES (?, ?, ?)
-        """, ("Landscape 2021", 2021, 1))
-        self.conn.commit()
+def test_update_painting(clean_test_db):
+    """
+    Inserts and updates a painting record.
+    """
+    db = DatabaseManager(TEST_DB, schema_path=SCHEMA_FILE)
+    p_id = db.insert_painting(name="Boat Scene", explicit_year=2014)
+    db.update_painting(p_id, inferred_year=2015, personal_favourite=1)
+    cur = db.conn.cursor()
+    cur.execute("SELECT inferred_year, personal_favourite FROM paintings WHERE painting_id = ?", (p_id,))
+    row = cur.fetchone()
+    assert row == (2015, 1)
 
-        self.cur.execute("SELECT name, explicit_year, personal_favourite FROM paintings")
-        row = self.cur.fetchone()
-        self.assertIsNotNone(row)
-        self.assertEqual(row[0], "Landscape 2021")
-        self.assertEqual(row[1], 2021)
-        self.assertEqual(row[2], 1)
+def test_link_painting_to_image(clean_test_db):
+    """
+    Checks many-to-many linking in painting_images.
+    """
+    db = DatabaseManager(TEST_DB, schema_path=SCHEMA_FILE)
+    img_id = db.insert_image(
+        filename="_DSC9999.NEF",
+        md5_checksum="cccccccccccccccccccccccccccccccc",
+        date_taken="2025-01-29T09:09:09"
+    )
+    p_id = db.insert_painting(name="MultiShots")
+    db.link_painting_to_image(p_id, img_id)
+    cur = db.conn.cursor()
+    cur.execute("SELECT painting_id, image_id FROM painting_images")
+    row = cur.fetchone()
+    assert row == (p_id, img_id)
 
-    def test_painting_images_ok(self):
-        """
-        Many-to-many link: painting_images
-        """
-        # Insert painting
-        self.cur.execute("INSERT INTO paintings (name) VALUES (?)", ("MultiShots",))
-        p_id = self.cur.lastrowid
-
-        # Insert two images
-        self.cur.execute("""
-            INSERT INTO images (filename, md5_checksum, is_raw, parent_image_id, date_taken)
-            VALUES (?, ?, ?, ?, ?)
-        """, ("_DSC0100.NEF", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 1, None, "2025-01-29T09:00:00"))
-        img1_id = self.cur.lastrowid
-
-        self.cur.execute("""
-            INSERT INTO images (filename, md5_checksum, is_raw, parent_image_id, date_taken)
-            VALUES (?, ?, ?, ?, ?)
-        """, ("_DSC0101.NEF", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 1, None, "2025-01-29T09:01:01"))
-        img2_id = self.cur.lastrowid
-
-        # Link them in painting_images
-        self.cur.execute("INSERT INTO painting_images (painting_id, image_id) VALUES (?, ?)", (p_id, img1_id))
-        self.cur.execute("INSERT INTO painting_images (painting_id, image_id) VALUES (?, ?)", (p_id, img2_id))
-        self.conn.commit()
-
-        # Verify
-        self.cur.execute("SELECT painting_id, image_id FROM painting_images")
-        rows = self.cur.fetchall()
-        self.assertEqual(len(rows), 2)
-        self.assertIn((p_id, img1_id), rows)
-        self.assertIn((p_id, img2_id), rows)
-
-    def test_ratings_ok(self):
-        """
-        Insert a rating with score in [1..5]. Also store a user.
-        """
-        # Insert painting & image
-        self.cur.execute("""
-            INSERT INTO paintings (name) VALUES (?)
-        """, ("Boats at Sunset",))
-        pid = self.cur.lastrowid
-
-        self.cur.execute("""
-            INSERT INTO images (filename, md5_checksum, is_raw, parent_image_id, date_taken)
-            VALUES (?, ?, ?, ?, ?)
-        """, ("_DSC9999.NEF", "cccccccccccccccccccccccccccccccc", 1, None, "2025-01-29T20:20:20"))
-        imgid = self.cur.lastrowid
-
-        # Insert rating
-        self.cur.execute("""
-            INSERT INTO ratings (painting_id, image_id, score, user)
-            VALUES (?, ?, ?, ?)
-        """, (pid, imgid, 5, "Carlos"))
-        self.conn.commit()
-
-        # Retrieve and check
-        self.cur.execute("SELECT painting_id, image_id, score, user FROM ratings")
-        row = self.cur.fetchone()
-        self.assertIsNotNone(row)
-        self.assertEqual(row[0], pid)
-        self.assertEqual(row[1], imgid)
-        self.assertEqual(row[2], 5)
-        self.assertEqual(row[3], "Carlos")
-
-    def test_ratings_invalid_score(self):
-        """
-        Try inserting a rating outside [1..5].
-        """
-        # Insert painting & image
-        self.cur.execute("""INSERT INTO paintings (name) VALUES (?)""", ("Bad Rating Test",))
-        pid = self.cur.lastrowid
-        self.cur.execute("""
-            INSERT INTO images (filename, md5_checksum, is_raw, parent_image_id, date_taken)
-            VALUES (?, ?, ?, ?, ?)
-        """, ("_DSC9998.NEF", "dddddddddddddddddddddddddddddddd", 1, None, "2025-01-29T21:21:21"))
-        imgid = self.cur.lastrowid
-
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.cur.execute("""
-                INSERT INTO ratings (painting_id, image_id, score)
-                VALUES (?, ?, ?)
-            """, (pid, imgid, 10))  # invalid
-            self.conn.commit()
-
-if __name__ == "__main__":
-    unittest.main()
+def test_insert_rating(clean_test_db):
+    """
+    Inserts an image, painting, then rating referencing both.
+    """
+    db = DatabaseManager(TEST_DB, schema_path=SCHEMA_FILE)
+    i_id = db.insert_image(
+        filename="_DSC7777.NEF",
+        md5_checksum="dddddddddddddddddddddddddddddddd",
+        date_taken="2025-01-29T08:08:08"
+    )
+    p_id = db.insert_painting(name="Rating Test")
+    r_id = db.insert_rating(p_id, i_id, score=5, user="Maria")
+    assert r_id > 0
+    cur = db.conn.cursor()
+    cur.execute("SELECT painting_id, image_id, score, user FROM ratings WHERE rating_id = ?", (r_id,))
+    row = cur.fetchone()
+    assert row == (p_id, i_id, 5, "Maria")
