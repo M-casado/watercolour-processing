@@ -127,12 +127,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--db",
-        required=True,
+        default="data/watercolours.db",
         help="Path to the SQLite DB file (e.g. 'data/watercolours.db')."
     )
     parser.add_argument(
         "--schema",
-        default=None,
+        default="src/watercolour_processing/database/db_schema.sql",
         help="Optional path to db_schema.sql if the DB schema may need applying (e.g. 'src/watercolour_processing/database/db_schema.sql')."
     )
     parser.add_argument(
