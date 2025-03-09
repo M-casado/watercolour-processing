@@ -7,6 +7,8 @@ Ensures the schema is present, offers CRUD methods, and handles custom exception
 
 import os
 import sqlite3
+import shutil
+from datetime import datetime
 from typing import Optional
 
 from watercolour_processing.logging_config import get_logger
@@ -36,6 +38,7 @@ class DatabaseManager:
         self.conn: Optional[sqlite3.Connection] = None
         self.open_connection()
         self._ensure_schema()
+        self._backup_database_if_needed()
 
     def open_connection(self) -> None:
         """Opens the SQLite connection and enables foreign key constraints."""
@@ -82,6 +85,38 @@ class DatabaseManager:
                 logger.error(msg)
                 raise DatabaseError(msg)
 
+    def _backup_database_if_needed(self) -> None:
+        """
+        Checks if the database already exists, and if a backup for today exists as well.
+        If the database exists, and there's no backup with today's date in the filename,
+        it creates a backup of the database with today's name in the filename.
+        """
+        if not os.path.exists(self.db_path):
+            logger.debug(f"Database file '{self.db_path}' does not exist, no backup needed.")
+            return
+
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        db_basename = os.path.basename(self.db_path)
+        db_dirname = os.path.dirname(self.db_path)
+        backup_filename = os.path.join(db_dirname, f"{today_str}.backup.{db_basename}")
+
+        if os.path.exists(backup_filename):
+            logger.debug(f"Backup for today '{backup_filename}' already exists. Skipping its creation.")
+            return
+
+        try:
+            shutil.copy2(self.db_path, backup_filename)
+            logger.debug(f"Created backup of database '{self.db_path}' as '{backup_filename}'.")
+        except IOError as e:
+            msg = f"Failed to create backup of database '{self.db_path}': {e}"
+            logger.error(msg)
+            raise DatabaseError(msg)
+
+        def __del__(self):
+            """Ensures connection is closed on object deletion."""
+            self.close_connection()
+
+    
     def _tables_present(self) -> bool:
         """Quick check for key tables. We'll need to add more if we change the db_schema.sql."""
         try:
