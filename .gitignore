@@ -27,3 +27,6 @@ venv/
 # Ignore logs
 logs/
 *.log
+
+# Ignore database files
+*.db
