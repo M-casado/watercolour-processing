@@ -40,7 +40,7 @@ def test_insert_image_ok(clean_test_db):
     with pytest.raises(DuplicateImageError):
         db.insert_image(
             filename="_DSC0001_DUP.NEF",
-            md5_checksum="abcdef1234567890abcdef1234567890",
+            md5_checksum="abcdef1234567890abcdef1234567890", #Same MD5
             date_taken="2025-01-29T12:35:00"
         )
     db.close_connection()
