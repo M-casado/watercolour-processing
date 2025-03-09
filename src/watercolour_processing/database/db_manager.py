@@ -108,6 +108,7 @@ class DatabaseManager:
     def insert_image(
         self,
         filename: str,
+        file_path: Optional[str],
         md5_checksum: str,
         is_raw: int = 1,
         parent_image_id: Optional[int] = None,
@@ -122,19 +123,20 @@ class DatabaseManager:
     ) -> int:
         """Inserts a new row into images, returning the new image_id."""
         if self.get_image_by_md5(md5_checksum) is not None:
-            logger.warning(f"Duplicate MD5 {md5_checksum} detected for file '{filename}'.")
+            logger.warning(f"Duplicate MD5 {md5_checksum} detected for file '{file_path}'.")
             raise DuplicateImageError(f"Duplicate MD5: {md5_checksum}")
 
         sql = """
         INSERT INTO images (
-            filename, md5_checksum, is_raw, parent_image_id, date_taken,
+            filename, file_path, md5_checksum, is_raw, parent_image_id, date_taken,
             order_in_batch, pipeline_version, flash_missing,
             cropped, cropped_date, rotation_degrees, rotated_date
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = (
             filename,
+            file_path,
             md5_checksum,
             is_raw,
             parent_image_id,
@@ -152,7 +154,7 @@ class DatabaseManager:
             cur.execute(sql, params)
             self.conn.commit()
             new_id = cur.lastrowid
-            logger.debug(f"Inserted image with ID={new_id}, file='{filename}'.")
+            logger.debug(f"Inserted image (ID={new_id}, filename='{filename}'), file_path='{file_path}'.")
             return new_id
         except sqlite3.Error as e:
             msg = f"Error inserting image '{filename}': {e}"

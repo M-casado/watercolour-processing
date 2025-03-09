@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS images (
     image_id           INTEGER PRIMARY KEY AUTOINCREMENT,
     filename           TEXT NOT NULL,
+    file_path          TEXT NOT NULL,
     md5_checksum TEXT NOT NULL CHECK (length(md5_checksum) = 32 AND md5_checksum GLOB '[0-9A-Fa-f]*'),      
     is_raw             INTEGER DEFAULT 1,   -- 1 = raw, 0 = processed
     parent_image_id    INTEGER,            -- if this is derived from another image

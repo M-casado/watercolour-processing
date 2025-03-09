@@ -32,6 +32,7 @@ def test_insert_image_ok(clean_test_db):
     db = DatabaseManager(TEST_DB, schema_path=SCHEMA_FILE)
     image_id = db.insert_image(
         filename="_DSC0001.NEF",
+        file_path="data/raw/_DSC0001.NEF",
         md5_checksum="abcdef1234567890abcdef1234567890",
         date_taken="2025-01-29T12:34:56"
     )
@@ -40,6 +41,7 @@ def test_insert_image_ok(clean_test_db):
     with pytest.raises(DuplicateImageError):
         db.insert_image(
             filename="_DSC0001_DUP.NEF",
+            file_path="data/raw/_DSC0001_DUP.NEF",
             md5_checksum="abcdef1234567890abcdef1234567890", #Same MD5
             date_taken="2025-01-29T12:35:00"
         )
@@ -52,17 +54,18 @@ def test_update_image(clean_test_db):
     db = DatabaseManager(TEST_DB, schema_path=SCHEMA_FILE)
     img_id = db.insert_image(
         filename="_DSC0002.NEF",
+        file_path="data/raw/_DSC0002.NEF",
         md5_checksum="11111111111111111111111111111111",
         date_taken="2025-01-29T10:00:00"
     )
     db.update_image(img_id, cropped=1, cropped_date="2025-01-29T11:00:00")
     row = db.get_image_by_md5("11111111111111111111111111111111")
     assert row is not None
-    # row columns: (image_id, filename, md5_checksum, is_raw, parent_image_id, date_taken,
+    # row columns: (image_id, filename, file_path, md5_checksum, is_raw, parent_image_id, date_taken,
     #               order_in_batch, pipeline_version, flash_missing, cropped, cropped_date,
     #               rotation_degrees, rotated_date)
-    assert row[9] == 1
-    assert row[10] == "2025-01-29T11:00:00"
+    assert row[10] == 1
+    assert row[11] == "2025-01-29T11:00:00"
 
 def test_insert_painting_ok(clean_test_db):
     """
@@ -95,6 +98,7 @@ def test_link_painting_to_image(clean_test_db):
     db = DatabaseManager(TEST_DB, schema_path=SCHEMA_FILE)
     img_id = db.insert_image(
         filename="_DSC9999.NEF",
+        file_path="data/raw/_DSC9999.NEF",
         md5_checksum="cccccccccccccccccccccccccccccccc",
         date_taken="2025-01-29T09:09:09"
     )
@@ -112,6 +116,7 @@ def test_insert_rating(clean_test_db):
     db = DatabaseManager(TEST_DB, schema_path=SCHEMA_FILE)
     i_id = db.insert_image(
         filename="_DSC7777.NEF",
+        file_path="data/raw/_DSC7777.NEF",
         md5_checksum="dddddddddddddddddddddddddddddddd",
         date_taken="2025-01-29T08:08:08"
     )
