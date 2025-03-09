@@ -9,6 +9,9 @@ import os
 import sqlite3
 from typing import Optional
 
+from watercolour_processing.logging_config import get_logger
+logger = get_logger(__name__)
+
 class DatabaseError(Exception):
     """General exception for database-related errors."""
     pass
@@ -40,16 +43,22 @@ class DatabaseManager:
             try:
                 self.conn = sqlite3.connect(self.db_path)
                 self.conn.execute("PRAGMA foreign_keys = ON;")
+                logger.info(f"Opened SQLite connection to '{self.db_path}' with foreign keys on.")
             except sqlite3.Error as e:
-                raise DatabaseError(f"Failed to connect to {self.db_path}: {e}")
+                msg = f"Failed to connect to {self.db_path}: {e}"
+                logger.error(msg)
+                raise DatabaseError(msg)
 
     def close_connection(self) -> None:
         """Closes the SQLite connection if it exists."""
         if self.conn:
             try:
                 self.conn.close()
+                logger.info(f"Closed connection to '{self.db_path}'.")
             except sqlite3.Error as e:
-                raise DatabaseError(f"Error closing DB connection: {e}")
+                msg = f"Error closing DB connection: {e}"
+                logger.error(msg)
+                raise DatabaseError(msg)
             self.conn = None
 
     def _ensure_schema(self) -> None:
@@ -59,26 +68,34 @@ class DatabaseManager:
         """
         if not self._tables_present():
             if not self.schema_path or not os.path.exists(self.schema_path):
-                raise DatabaseError(
-                    "Database schema is missing and schema_path was not provided or invalid."
-                )
+                msg = "Database schema is missing and schema_path was not provided or invalid."
+                logger.error(msg)
+                raise DatabaseError(msg)
             try:
+                logger.info(f"No existing schema found; applying from '{self.schema_path}'.")
                 with open(self.schema_path, 'r', encoding='utf-8') as f:
                     sql_script = f.read()
                 self.conn.executescript(sql_script)
+                logger.info("Database schema applied successfully.")
             except sqlite3.Error as e:
-                raise DatabaseError(f"Error applying schema: {e}")
+                msg = f"Error applying schema: {e}"
+                logger.error(msg)
+                raise DatabaseError(msg)
 
     def _tables_present(self) -> bool:
-        """Quick check for key tables. Extend as needed for your schema."""
+        """Quick check for key tables. We'll need to add more if we change the db_schema.sql."""
         try:
             cur = self.conn.cursor()
             cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
             existing = {row[0] for row in cur.fetchall()}
             required = {"images", "paintings", "painting_images", "ratings"}
-            return required.issubset(existing)
+            tables_found = required.issubset(existing)
+            logger.debug(f"Tables present check:  Result={tables_found} Found: [{existing}], Needed [{required}]")
+            return tables_found
         except sqlite3.Error as e:
-            raise DatabaseError(f"Error checking existing tables: {e}")
+            msg = f"Error checking existing tables: {e}"
+            logger.error(msg)
+            raise DatabaseError(msg)
 
     def __del__(self):
         """Ensures connection is closed on object deletion."""
@@ -105,7 +122,9 @@ class DatabaseManager:
     ) -> int:
         """Inserts a new row into images, returning the new image_id."""
         if self.get_image_by_md5(md5_checksum) is not None:
+            logger.warning(f"Duplicate MD5 {md5_checksum} detected for file '{filename}'.")
             raise DuplicateImageError(f"Duplicate MD5: {md5_checksum}")
+
         sql = """
         INSERT INTO images (
             filename, md5_checksum, is_raw, parent_image_id, date_taken,
@@ -132,9 +151,13 @@ class DatabaseManager:
             cur = self.conn.cursor()
             cur.execute(sql, params)
             self.conn.commit()
-            return cur.lastrowid
+            new_id = cur.lastrowid
+            logger.debug(f"Inserted image with ID={new_id}, file='{filename}'.")
+            return new_id
         except sqlite3.Error as e:
-            raise DatabaseError(f"Error inserting image '{filename}': {e}")
+            msg = f"Error inserting image '{filename}': {e}"
+            logger.error(msg)
+            raise DatabaseError(msg)
 
     def get_image_by_md5(self, md5_checksum: str):
         """Fetches a row from images by MD5 or returns None if not found."""
@@ -142,9 +165,13 @@ class DatabaseManager:
         try:
             cur = self.conn.cursor()
             cur.execute(sql, (md5_checksum,))
-            return cur.fetchone()
+            row = cur.fetchone()
+            logger.debug(f"get_image_by_md5({md5_checksum}) -> image_id: {row} {row is not None}")
+            return row
         except sqlite3.Error as e:
-            raise DatabaseError(f"Error retrieving image by MD5={md5_checksum}: {e}")
+            msg = f"Error retrieving image by MD5={md5_checksum}: {e}"
+            logger.error(msg)
+            raise DatabaseError(msg)
 
     def update_image(self, image_id: int, **kwargs) -> None:
         """
@@ -152,7 +179,9 @@ class DatabaseManager:
         Example usage: update_image(image_id=5, cropped=1, cropped_date='2025-01-30T10:00:00')
         """
         if not kwargs:
+            logger.debug(f"No update requested for image_id={image_id}.")
             return
+
         columns = []
         params = []
         for key, val in kwargs.items():
@@ -164,8 +193,11 @@ class DatabaseManager:
             cur = self.conn.cursor()
             cur.execute(sql, tuple(params))
             self.conn.commit()
+            logger.debug(f"Updated image_id={image_id} with {kwargs}.")
         except sqlite3.Error as e:
-            raise DatabaseError(f"Error updating image_id={image_id}: {e}")
+            msg = f"Error updating image_id={image_id}: {e}"
+            logger.error(msg)
+            raise DatabaseError(msg)
 
     # -----------------------------------------------------------------------
     # PAINTING METHODS
@@ -190,9 +222,13 @@ class DatabaseManager:
             cur = self.conn.cursor()
             cur.execute(sql, params)
             self.conn.commit()
-            return cur.lastrowid
+            new_id = cur.lastrowid
+            logger.debug(f"Inserted painting with painting_id={new_id}, name='{name}'.")
+            return new_id
         except sqlite3.Error as e:
-            raise DatabaseError(f"Error inserting painting '{name}': {e}")
+            msg = f"Error inserting painting '{name}': {e}"
+            logger.error(msg)
+            raise DatabaseError(msg)
 
     def update_painting(self, painting_id: int, **kwargs) -> None:
         """
@@ -200,7 +236,9 @@ class DatabaseManager:
         e.g. update_painting(3, inferred_year=2015)
         """
         if not kwargs:
+            logger.debug(f"No update requested for painting_id={painting_id}.")
             return
+
         columns = []
         params = []
         for key, val in kwargs.items():
@@ -212,8 +250,11 @@ class DatabaseManager:
             cur = self.conn.cursor()
             cur.execute(sql, tuple(params))
             self.conn.commit()
+            logger.debug(f"Updated painting_id={painting_id} with {kwargs}.")
         except sqlite3.Error as e:
-            raise DatabaseError(f"Error updating painting_id={painting_id}: {e}")
+            msg = f"Error updating painting_id={painting_id}: {e}"
+            logger.error(msg)
+            raise DatabaseError(msg)
 
     # -----------------------------------------------------------------------
     # LINK METHODS
@@ -226,8 +267,11 @@ class DatabaseManager:
             cur = self.conn.cursor()
             cur.execute(sql, (painting_id, image_id))
             self.conn.commit()
+            logger.debug(f"Linked painting_id={painting_id} to image_id={image_id}.")
         except sqlite3.Error as e:
-            raise DatabaseError(f"Error linking painting_id={painting_id} to image_id={image_id}: {e}")
+            msg = f"Error linking painting_id={painting_id} to image_id={image_id}: {e}"
+            logger.error(msg)
+            raise DatabaseError(msg)
 
     # -----------------------------------------------------------------------
     # RATING METHODS
@@ -250,6 +294,10 @@ class DatabaseManager:
             cur = self.conn.cursor()
             cur.execute(sql, params)
             self.conn.commit()
-            return cur.lastrowid
+            new_id = cur.lastrowid
+            logger.debug(f"Inserted rating_id={new_id} for painting_id={painting_id}, image_id={image_id}, score={score}.")
+            return new_id
         except sqlite3.Error as e:
-            raise DatabaseError(f"Error inserting rating for painting_id={painting_id}, image_id={image_id}: {e}")
+            msg = f"Error inserting rating for painting_id={painting_id}, image_id={image_id}: {e}"
+            logger.error(msg)
+            raise DatabaseError(msg)
