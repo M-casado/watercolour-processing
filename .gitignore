@@ -23,3 +23,7 @@ venv/
 
 # Ignore installation files
 *.egg-info
+
+# Ignore logs
+logs/
+*.log
