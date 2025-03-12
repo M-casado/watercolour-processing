@@ -44,3 +44,17 @@ def get_thumbnails_dir():
     repo_root = get_repo_root()
     thumb_dir = os.path.join(repo_root, "data", "thumbnails")
     return thumb_dir
+
+def get_db_schema_path():
+    """
+    Returns an absolute path to 'src/watercolour_processing/database/db_schema.sql' at the repo root.
+    """
+    repo_root = get_repo_root()
+    return os.path.join(repo_root, "src", "watercolour_processing", "database", "db_schema.sql")
+
+def get_data_raw_path():
+    """
+    Returns an absolute path to 'data/raw' at the repo root.
+    """
+    repo_root = get_repo_root()
+    return os.path.join(repo_root, "data", "raw")

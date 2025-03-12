@@ -1,10 +1,16 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>Watercolour Home</title>
-  </head>
-  <body>
-    <h1>Welcome</h1>
-    <p><a href="{{ url_for('admin_login') }}">Admin Login</a></p>
-  </body>
-</html>
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex flex-column align-items-center my-5">
+  <h1 class="mb-4">Welcome to Watercolour Processing</h1>
+  <p class="text-center">
+    This is the main landing page. You can go to the admin panel to manage images, 
+    or use other features.
+  </p>
+  <div class="mt-3">
+    <a href="{{ url_for('admin_login') }}" class="btn btn-primary me-2">Admin Login</a>
+    <!-- rating route in the future may go here -->
+  </div>
+</div>
+
+{% endblock %}

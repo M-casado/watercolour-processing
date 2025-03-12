@@ -2,11 +2,13 @@ import os
 import re
 from flask import (
     Flask, request, render_template, redirect,
-    url_for, session, flash, send_file
+    url_for, session, flash, send_file, Response, 
+    stream_with_context
 )
+import time
 from watercolour_processing.database.db_manager import DatabaseManager, DatabaseError
 from watercolour_processing.ingestion.ingest_raw_images import ingest_raw_images
-from watercolour_processing.utils import get_db_path, get_thumbnails_dir
+from watercolour_processing.utils import get_db_path, get_thumbnails_dir, get_db_schema_path, get_data_raw_path
 
 app = Flask(__name__)
 
@@ -31,7 +33,7 @@ def home():
 @app.route("/admin_login", methods=["GET", "POST"])
 def admin_login():
     """
-    Basic admin login. In production, you'd store hashed passwords 
+    Basic admin login. In production, we'd store hashed passwords 
     in a user table, not in plain text.
     """
     if request.method == "POST":
@@ -171,12 +173,15 @@ def admin_image_detail(image_id):
     try:
         with DatabaseManager(db_path) as db:
             cur = db.conn.cursor()
-            cur.execute("PRAGMA table_info(images)")
-            col_data = cur.fetchall()
-            col_names = [c[1] for c in col_data]  # c[1] is the column name
 
-            cur.execute("SELECT * FROM images WHERE image_id = ?", (image_id,))
+            # figure out columns from the 'images' table
+            cur.execute("PRAGMA table_info(images)")
+            table_info = cur.fetchall()
+            col_names = [t[1] for t in table_info]  # 'name' is t[1]
+
+            cur.execute("SELECT * FROM images WHERE image_id=?", (image_id,))
             row = cur.fetchone()
+
     except DatabaseError as e:
         flash(f"Database error: {e}", "error")
         return redirect(url_for("admin_list_images"))
@@ -184,10 +189,15 @@ def admin_image_detail(image_id):
     if not row:
         flash("Image not found in DB.", "warning")
         return redirect(url_for("admin_list_images"))
-
+    
     # 'row' is a tuple of columns, col_names is a list of column names
     # We pass both to the template
-    return render_template("admin_image_detail.html", row=row, col_names=col_names, image_id=image_id)
+    return render_template(
+        "admin_image_detail.html",
+        image_id=image_id,
+        row=row,
+        col_names=col_names
+    )
 
 @app.route("/admin/thumbnail/<int:image_id>")
 @admin_required
@@ -204,39 +214,62 @@ def admin_thumbnail(image_id):
 @app.route("/admin/ingest", methods=["GET", "POST"])
 @admin_required
 def admin_ingest():
+    db_path = get_db_path()
+    schema_path = get_db_schema_path()
+    default_data_folder = get_data_raw_path()
+
     if request.method == "POST":
-        folder = request.form.get("folder", "").strip()
-        db_path = get_db_path()  
-        schema_path = "src/watercolour_processing/database/db_schema.sql"
-        if not folder or not os.path.isdir(folder):
-            flash("Invalid folder.", "error")
-            return redirect(url_for("admin_ingest"))
+        folder = request.form.get("folder", default_data_folder).strip()
+        lines = []
 
         try:
-            stats = ingest_raw_images(
-                paths=[folder],
+            ingestion_results = run_ingestion_with_logs(
+                folder,
                 db_path=db_path,
                 schema_path=schema_path
             )
-            flash(f"Ingestion completed. Stats: {stats}", "success")
-            return redirect(url_for("admin_dashboard"))
+            lines.extend(ingestion_results)
+            lines.append("\nIngestion completed successfully.")
         except Exception as e:
+            lines.append(f"ERROR: {e}")
             flash(f"Ingestion failed: {e}", "error")
-            return redirect(url_for("admin_ingest"))
+
+        return render_template("admin_ingest_status.html", lines=lines)
+
     else:
-        # GET request
-        default_folder = "data/raw"
+        # GET: show how many image files are at the default folder
+        folder = default_data_folder
         count_files = 0
-        if os.path.isdir(default_folder):
-            count_files = sum(1 for f in os.listdir(default_folder) 
-                              if f.lower().endswith(".nef"))
-        return render_template("admin_ingest.html", folder=default_folder, count_files=count_files)
+        if os.path.isdir(folder):
+            count_files = sum(1 for f in os.listdir(folder))
+
+        return render_template("admin_ingest.html", folder=folder, count_files=count_files)
+
+def run_ingestion_with_logs(folder, db_path, schema_path=None):
+    """
+    A sample function that calls an existing 'ingest_raw_images' logic 
+    but captures line-by-line or summary info in a list of lines.
+    """
+    lines = []
+    lines.append(f"Ingesting from: '{folder}'")
+    stats = ingest_raw_images(
+        paths=[folder],
+        db_path=db_path,
+        schema_path=schema_path
+    )
+    # Then build lines with stats
+    lines.append(f"Total scanned: {stats.get('scanned',0)}")
+    lines.append(f"Inserted: {stats.get('inserted',0)}")
+    lines.append(f"Duplicates: {stats.get('duplicates',0)}")
+    lines.append(f"End of ingestion.")
+    return lines
+
 # -------------------------------------------------------------------------
 # CREATE THE APP
 # -------------------------------------------------------------------------
 def create_app():
     """
-    Factory function if you prefer a more flexible config approach.
+    Factory function for a more flexible config approach.
     """
     return app
 
