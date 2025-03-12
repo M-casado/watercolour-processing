@@ -9,10 +9,12 @@ import os
 import hashlib
 import exifread
 from typing import List, Optional
+from PIL import Image
 
 from watercolour_processing.logging_config import get_logger
 from watercolour_processing.database.db_manager import DatabaseManager, DuplicateImageError
 
+THUMB_DIR = "data/thumbnails"
 logger = get_logger(__name__)
 
 def compute_md5(file_path: str) -> str:
@@ -85,13 +87,14 @@ def ingest_raw_images(
 
             logger.debug(f"Processing '{file_path}' (MD5={md5}, exif_date={exif_date})")
             try:
-                db.insert_image(
+                image_id = db.insert_image(
                     filename=filename,
                     file_path=file_path,
                     md5_checksum=md5,
                     date_taken=exif_date,
                     pipeline_version=pipeline_version
                 )
+                create_thumbnail(file_path, image_id)
                 stats["inserted"] += 1
                 logger.info(f"Inserted new image: {file_path}")
             except DuplicateImageError:
@@ -114,6 +117,19 @@ def ingest_raw_images(
 
     logger.info(f"Finished ingestion. Stats: {stats}")
     return stats
+
+def create_thumbnail(full_image_path: str, image_id: int):
+    """
+    Creates a small 200px-wide thumbnail in THUMB_DIR with name {image_id}.png
+    """
+    if not os.path.exists(THUMB_DIR):
+        os.makedirs(THUMB_DIR, exist_ok=True)
+
+    thumbnail_path = os.path.join(THUMB_DIR, f"{image_id}.png")
+    with Image.open(full_image_path) as img:
+        img.thumbnail((200, 200))  # 200 px wide, aspect ratio
+        img.save(thumbnail_path, "PNG")
+    return thumbnail_path
 
 if __name__ == "__main__":
     import argparse
