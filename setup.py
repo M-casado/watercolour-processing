@@ -11,7 +11,7 @@ setup(
     python_requires=">=3.7",
     description="Watercolour painting processing and metadata management",
     author="Marcos Casado Barbero (0000-0002-7747-6256)",
-    url="https://github.com/yourname/watercolour-processing",
+    url="https://github.com/M-casado/watercolour-processing",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
