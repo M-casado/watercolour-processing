@@ -71,48 +71,47 @@ def ingest_raw_images(
     stats = {"scanned": 0, "inserted": 0, "duplicates": 0, "total_paths": len(paths)}
     logger.info(f"Starting ingestion with paths={paths}")
 
-    db = DatabaseManager(db_path, schema_path)
+    with DatabaseManager(db_path, schema_path) as db:
 
-    def _process_file(file_path: str):
-        ext = os.path.splitext(file_path)[1].lower()
-        if ext not in extensions:
-            return
+        def _process_file(file_path: str):
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext not in extensions:
+                return
 
-        stats["scanned"] += 1
-        md5 = compute_md5(file_path)
-        exif_date = extract_exif_date(file_path)
-        filename = os.path.basename(file_path)
+            stats["scanned"] += 1
+            md5 = compute_md5(file_path)
+            exif_date = extract_exif_date(file_path)
+            filename = os.path.basename(file_path)
 
-        logger.debug(f"Processing '{file_path}' (MD5={md5}, exif_date={exif_date})")
-        try:
-            db.insert_image(
-                filename=filename,
-                file_path=file_path,
-                md5_checksum=md5,
-                date_taken=exif_date,
-                pipeline_version=pipeline_version
-            )
-            stats["inserted"] += 1
-            logger.info(f"Inserted new image: {file_path}")
-        except DuplicateImageError:
-            stats["duplicates"] += 1
-            logger.warning(f"Duplicate MD5 found for '{file_path}', skipping.")
+            logger.debug(f"Processing '{file_path}' (MD5={md5}, exif_date={exif_date})")
+            try:
+                db.insert_image(
+                    filename=filename,
+                    file_path=file_path,
+                    md5_checksum=md5,
+                    date_taken=exif_date,
+                    pipeline_version=pipeline_version
+                )
+                stats["inserted"] += 1
+                logger.info(f"Inserted new image: {file_path}")
+            except DuplicateImageError:
+                stats["duplicates"] += 1
+                logger.warning(f"Duplicate MD5 found for '{file_path}', skipping.")
 
-    def _process_path(path: str):
-        if os.path.isfile(path):
-            _process_file(path)
-        elif os.path.isdir(path):
-            for root, dirs, files in os.walk(path):
-                for f in files:
-                    _process_file(os.path.join(root, f))
-        else:
-            logger.error(f"Invalid path: {path}")
+        def _process_path(path: str):
+            if os.path.isfile(path):
+                _process_file(path)
+            elif os.path.isdir(path):
+                for root, dirs, files in os.walk(path):
+                    for f in files:
+                        _process_file(os.path.join(root, f))
+            else:
+                logger.error(f"Invalid path: {path}")
 
-    # Process each path
-    for p in paths:
-        _process_path(p)
+        # Process each path
+        for p in paths:
+            _process_path(p)
 
-    db.close_connection()
     logger.info(f"Finished ingestion. Stats: {stats}")
     return stats
 

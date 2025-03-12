@@ -36,9 +36,25 @@ class DatabaseManager:
         self.db_path = db_path
         self.schema_path = schema_path
         self.conn: Optional[sqlite3.Connection] = None
-        self.open_connection()
-        self._ensure_schema()
-        self._backup_database_if_needed()
+
+    def __enter__(self):
+        """
+        Called when entering a 'with' block. Ensures connection is open
+        and returns 'self' so we can do 'with DatabaseManager(...) as db:'.
+        """
+        if not self.conn:
+            self.open_connection()
+            self._ensure_schema()
+            self._backup_database_if_needed()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Called at the end of a 'with' block. Closes the connection.
+        """
+        self.close_connection()
+        # Returning False so that any exception will be re-raised
+        return False
 
     def open_connection(self) -> None:
         """Opens the SQLite connection and enables foreign key constraints."""
