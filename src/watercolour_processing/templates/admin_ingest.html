@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+  <head><title>Run Ingestion</title></head>
+  <body>
+    <h1>Ingestion</h1>
+    <p>Current folder: {{ folder }} has {{ count_files }} files.</p>
+    <form method="POST">
+      <label>Folder Path:
+        <input type="text" name="folder" value="{{ folder }}" />
+      </label>
+      <button type="submit">Ingest</button>
+    </form>
+    <p><a href="{{ url_for('admin_dashboard') }}">Back to Admin</a></p>
+  </body>
+</html>

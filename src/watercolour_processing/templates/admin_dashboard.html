@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Admin Dashboard</title>
+  </head>
+  <body>
+    <h1>Admin Dashboard</h1>
+    <ul>
+      <li><a href="{{ url_for('admin_list_images') }}">List Images</a></li>
+      <li><a href="{{ url_for('admin_ingest') }}">Run Ingestion</a></li>
+      <!-- Future tasks: link to cropping, painting management, etc. -->
+    </ul>
+    <p><a href="{{ url_for('admin_logout') }}">Log Out</a></p>
+  </body>
+</html>

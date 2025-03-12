@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Images</title>
+</head>
+<body>
+
+<h1>Images</h1>
+<!-- Filter form -->
+<form method="GET">
+  <label>Filename:
+    <input type="text" name="filename" value="{{ filename_filter }}" />
+  </label>
+  <label>Date From:
+    <input type="text" name="date_from" value="{{ date_from }}" />
+  </label>
+  <label>Date To:
+    <input type="text" name="date_to" value="{{ date_to }}" />
+  </label>
+  <button type="submit">Filter</button>
+</form>
+
+<p>Total: {{ total_count }} images found.</p>
+
+{% if images and images|length > 0 %}
+  <table border="1" cellpadding="6">
+    <tr>
+      <th>ID</th>
+      <th>Filename</th>
+      <th>Date Taken</th>
+      <th>Thumbnail</th>
+    </tr>
+    {% for img in images %}
+      <tr>
+        <td>
+          <!-- Link to detail page -->
+          <a href="{{ url_for('admin_image_detail', image_id=img[0]) }}">
+            {{ img[0] }}
+          </a>
+        </td>
+        <td>{{ img[1] }}</td>
+        <td>{{ img[3] }}</td> <!-- date_taken -->
+        <td>
+          <img src="{{ url_for('admin_thumbnail', image_id=img[0]) }}" style="max-width:100px;" />
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+  <p>Page {{ page }} of {{ total_pages }}</p>
+  <div>
+    {% if page > 1 %}
+      <a href="?filename={{ filename_filter }}&date_from={{date_from}}&date_to={{date_to}}&page={{page-1}}&per_page={{per_page}}">Prev</a>
+    {% endif %}
+    {% if page < total_pages %}
+      <a href="?filename={{ filename_filter }}&date_from={{date_from}}&date_to={{date_to}}&page={{page+1}}&per_page={{per_page}}">Next</a>
+    {% endif %}
+  </div>
+{% else %}
+  <p><em>No images found or your database is empty.</em></p>
+{% endif %}
+
+<p><a href="{{ url_for('admin_dashboard') }}">Back to Admin</a></p>
+
+</body>
+</html>
