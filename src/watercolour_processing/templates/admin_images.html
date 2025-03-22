@@ -38,11 +38,17 @@
         {% if is_raw_filter == '1' %}checked{% endif %}>
       <label class="form-check-label" for="isRawCheck">Is Raw</label>
     </div>
-    <div class="form-check">
+    <div class="form-check me-3">
       <input class="form-check-input" type="checkbox" name="cropped" value="1"
         id="croppedCheck"
         {% if cropped_filter == '1' %}checked{% endif %}>
       <label class="form-check-label" for="croppedCheck">Cropped</label>
+    </div>
+    <div class="form-check me-3">
+      <input class="form-check-input" type="checkbox" name="rotated" value="1"
+        id="rotatedCheck"
+        {% if rotated_filter == '1' %}checked{% endif %}>
+      <label class="form-check-label" for="rotatedCheck">Rotated</label>
     </div>
   </div>
 
@@ -76,21 +82,21 @@
                                  page=page,
                                  per_page=per_page,
                                  is_raw=is_raw_filter,
-                                 cropped=cropped_filter) }}">
+                                 cropped=cropped_filter,
+                                 rotated=rotated_filter) }}">
               {{ img[0] }}
             </a>
           </td>
           <td>{{ img[1] }}</td>
           <td>{{ img[3] }}</td>
           <td>
-            <!-- Convert 1/0 to Yes/No -->
             {% if img[4] == 1 %}Yes{% else %}No{% endif %}
           </td>
           <td>
             {% if img[5] == 1 %}Yes{% else %}No{% endif %}
           </td>
           <td>
-            <!-- A clickable thumbnail link (if your code includes admin_thumbnail route) -->
+            <!-- A clickable thumbnail link -->
             <a href="{{ url_for('admin_image_detail',
                                  image_id=img[0],
                                  filename=filename_filter,
@@ -99,10 +105,13 @@
                                  page=page,
                                  per_page=per_page,
                                  is_raw=is_raw_filter,
-                                 cropped=cropped_filter) }}">
-              <img src="{{ url_for('admin_thumbnail', image_id=img[0]) }}"
-                   style="max-width:100px;"
-                   class="img-thumbnail">
+                                 cropped=cropped_filter,
+                                 rotated=rotated_filter) }}">
+              <img 
+                src="{{ url_for('admin_thumbnail', image_id=img[0]) }}"
+                style="max-width: 100px;"
+                class="img-thumbnail"
+              />
             </a>
           </td>
         </tr>

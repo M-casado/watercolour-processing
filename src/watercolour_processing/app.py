@@ -96,6 +96,7 @@ def admin_list_images():
     date_to = request.args.get("date_to", "").strip()
     is_raw_filter = request.args.get("is_raw")     # None if unchecked, '1' if checked
     cropped_filter = request.args.get("cropped")
+    rotated_filter = request.args.get("rotated")
 
     offset = (page - 1) * per_page
 
@@ -123,6 +124,9 @@ def admin_list_images():
 
     if cropped_filter == '1':
         sql_base += " AND cropped = 1"
+
+    if rotated_filter == '1':
+        sql_base += " AND rotation_degrees != 0"
 
     sql_base += " ORDER BY image_id LIMIT ? OFFSET ?"
     params.extend([per_page, offset])
@@ -158,6 +162,9 @@ def admin_list_images():
             if cropped_filter == '1':
                 count_sql += " AND cropped = 1"
 
+            if rotated_filter == '1':
+                count_sql += " AND rotation_degrees != 0"
+
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
 
@@ -168,7 +175,6 @@ def admin_list_images():
     total_pages = (total_count + per_page - 1) // per_page
 
     if not images:
-        # We can optionally flash a message or just let the template show "no images"
         flash("No images found in the DB." if total_count == 0 else "No images match your filters.", "info")
 
     return render_template(
@@ -182,7 +188,8 @@ def admin_list_images():
         date_from=date_from,
         date_to=date_to,
         is_raw_filter=is_raw_filter,
-        cropped_filter=cropped_filter
+        cropped_filter=cropped_filter,
+        rotated_filter=rotated_filter
     )
 
 @app.route("/admin/image/<int:image_id>")
