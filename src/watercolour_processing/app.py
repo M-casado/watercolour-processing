@@ -90,14 +90,17 @@ def admin_list_images():
     db_path = get_db_path()
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 20))
+
     filename_filter = request.args.get("filename", "").strip()
     date_from = request.args.get("date_from", "").strip()
     date_to = request.args.get("date_to", "").strip()
+    is_raw_filter = request.args.get("is_raw")     # None if unchecked, '1' if checked
+    cropped_filter = request.args.get("cropped")
 
     offset = (page - 1) * per_page
 
     sql_base = """
-        SELECT image_id, filename, md5_checksum, date_taken
+        SELECT image_id, filename, md5_checksum, date_taken, is_raw, cropped
         FROM images
         WHERE 1=1
     """
@@ -106,18 +109,27 @@ def admin_list_images():
     if filename_filter:
         sql_base += " AND filename LIKE ?"
         params.append(f"%{filename_filter}%")
+
     if date_from:
         sql_base += " AND date_taken >= ?"
         params.append(date_from)
+
     if date_to:
         sql_base += " AND date_taken <= ?"
         params.append(date_to)
+
+    if is_raw_filter == '1':
+        sql_base += " AND is_raw = 1"
+
+    if cropped_filter == '1':
+        sql_base += " AND cropped = 1"
 
     sql_base += " ORDER BY image_id LIMIT ? OFFSET ?"
     params.extend([per_page, offset])
 
     images = []
     total_count = 0
+
     try:
         with DatabaseManager(db_path) as db:
             cur = db.conn.cursor()
@@ -131,18 +143,25 @@ def admin_list_images():
             if filename_filter:
                 count_sql += " AND filename LIKE ?"
                 count_params.append(f"%{filename_filter}%")
+
             if date_from:
                 count_sql += " AND date_taken >= ?"
                 count_params.append(date_from)
+
             if date_to:
                 count_sql += " AND date_taken <= ?"
                 count_params.append(date_to)
+
+            if is_raw_filter == '1':
+                count_sql += " AND is_raw = 1"
+
+            if cropped_filter == '1':
+                count_sql += " AND cropped = 1"
 
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
 
     except DatabaseError as e:
-        # If DB doesn't exist or is missing tables, handle gracefully
         flash(f"Database error: {e}", "error")
         return render_template("admin_images.html", images=[], total_count=0, page=1, per_page=20, total_pages=1)
 
@@ -161,7 +180,9 @@ def admin_list_images():
         total_count=total_count,
         filename_filter=filename_filter,
         date_from=date_from,
-        date_to=date_to
+        date_to=date_to,
+        is_raw_filter=is_raw_filter,
+        cropped_filter=cropped_filter
     )
 
 @app.route("/admin/image/<int:image_id>")

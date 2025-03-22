@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
 
-<!-- Title and pagination at top -->
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
     <h4 class="m-0">Images</h4>
@@ -9,17 +8,16 @@
   </div>
   <div>
     <a class="btn btn-sm btn-outline-primary {% if page <= 1 %}disabled{% endif %}"
-       href="{% if page > 1 %}?filename={{ filename_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page-1 }}&per_page={{ per_page }}{% else %}#{% endif %}">
+       href="{% if page > 1 %}?filename={{ filename_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page-1 }}&per_page={{ per_page }}&is_raw={{ is_raw_filter }}&cropped={{ cropped_filter }}{% else %}#{% endif %}">
       Prev
     </a>
     <a class="btn btn-sm btn-outline-primary {% if page >= total_pages %}disabled{% endif %}"
-       href="{% if page < total_pages %}?filename={{ filename_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page+1 }}&per_page={{ per_page }}{% else %}#{% endif %}">
+       href="{% if page < total_pages %}?filename={{ filename_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page+1 }}&per_page={{ per_page }}&is_raw={{ is_raw_filter }}&cropped={{ cropped_filter }}{% else %}#{% endif %}">
       Next
     </a>
   </div>
 </div>
 
-<!-- Filter form -->
 <form method="GET" class="row g-3 mb-3">
   <div class="col-auto">
     <label for="filename" class="form-label">Filename</label>
@@ -33,6 +31,21 @@
     <label for="date_to" class="form-label">Date To</label>
     <input type="text" class="form-control" name="date_to" value="{{ date_to }}" id="date_to"/>
   </div>
+  <div class="col-auto d-flex align-items-center" style="margin-top: 2rem;">
+    <div class="form-check me-3">
+      <input class="form-check-input" type="checkbox" name="is_raw" value="1"
+        id="isRawCheck"
+        {% if is_raw_filter == '1' %}checked{% endif %}>
+      <label class="form-check-label" for="isRawCheck">Is Raw</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" name="cropped" value="1"
+        id="croppedCheck"
+        {% if cropped_filter == '1' %}checked{% endif %}>
+      <label class="form-check-label" for="croppedCheck">Cropped</label>
+    </div>
+  </div>
+
   <div class="col-auto" style="margin-top: 2rem;">
     <button type="submit" class="btn btn-primary">Filter</button>
   </div>
@@ -46,6 +59,8 @@
           <th>ID</th>
           <th>Filename</th>
           <th>Date Taken</th>
+          <th>Is Raw</th>
+          <th>Cropped</th>
           <th>Thumbnail</th>
         </tr>
       </thead>
@@ -59,26 +74,35 @@
                                  date_from=date_from,
                                  date_to=date_to,
                                  page=page,
-                                 per_page=per_page) }}">
+                                 per_page=per_page,
+                                 is_raw=is_raw_filter,
+                                 cropped=cropped_filter) }}">
               {{ img[0] }}
             </a>
           </td>
           <td>{{ img[1] }}</td>
           <td>{{ img[3] }}</td>
           <td>
-            <!-- Clickable thumbnail -->
+            <!-- Convert 1/0 to Yes/No -->
+            {% if img[4] == 1 %}Yes{% else %}No{% endif %}
+          </td>
+          <td>
+            {% if img[5] == 1 %}Yes{% else %}No{% endif %}
+          </td>
+          <td>
+            <!-- A clickable thumbnail link (if your code includes admin_thumbnail route) -->
             <a href="{{ url_for('admin_image_detail',
                                  image_id=img[0],
                                  filename=filename_filter,
                                  date_from=date_from,
                                  date_to=date_to,
                                  page=page,
-                                 per_page=per_page) }}">
-              <img 
-                src="{{ url_for('admin_thumbnail', image_id=img[0]) }}"
-                style="max-width: 100px;"
-                class="img-thumbnail"
-              />
+                                 per_page=per_page,
+                                 is_raw=is_raw_filter,
+                                 cropped=cropped_filter) }}">
+              <img src="{{ url_for('admin_thumbnail', image_id=img[0]) }}"
+                   style="max-width:100px;"
+                   class="img-thumbnail">
             </a>
           </td>
         </tr>
