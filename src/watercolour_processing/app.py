@@ -3,8 +3,9 @@ import re
 from flask import (
     Flask, request, render_template, redirect,
     url_for, session, flash, send_file, Response, 
-    stream_with_context
+    stream_with_context, send_file
 )
+import mimetypes
 import time
 from watercolour_processing.database.db_manager import DatabaseManager, DatabaseError
 from watercolour_processing.ingestion.ingest_raw_images import ingest_raw_images
@@ -15,6 +16,10 @@ app = Flask(__name__)
 # Temporary hardcoded credentials
 app.secret_key = "CHANGE_THIS_IN_PRODUCTION"  #! Required for session handling
 ADMIN_PASSWORD = "admin123" #!
+INLINE_IMAGE_TYPES = {
+    "image/png", "image/jpeg", "image/gif",
+    "image/webp", "image/bmp", "image/tiff"
+}
 
 # -------------------------------------------------------------------------
 # HOME / LANDING
@@ -192,49 +197,131 @@ def admin_list_images():
         rotated_filter=rotated_filter
     )
 
+def fetch_image_record(db_path, image_id):
+    """
+    Helper function to retrieve a row from 'images' for a given image_id.
+    Returns the entire row or None if not found.
+    Raises DatabaseError if there's a DB-level issue.
+    """
+    with DatabaseManager(db_path) as db:
+        cur = db.conn.cursor()
+        cur.execute("SELECT * FROM images WHERE image_id = ?", (image_id,))
+        return cur.fetchone()
+
+def fetch_file_path(db_path, image_id):
+    """
+    Helper to retrieve file_path from the 'images' table for a given image_id.
+    Returns the file_path string, or None if not found.
+    Raises DatabaseError if there's a DB error.
+    """
+    with DatabaseManager(db_path) as db:
+        cur = db.conn.cursor()
+        cur.execute("SELECT file_path FROM images WHERE image_id = ?", (image_id,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
 @app.route("/admin/image/<int:image_id>")
-@admin_required
 def admin_image_detail(image_id):
+    """
+    Shows details for a single image, including whether it can be displayed inline.
+    """
     db_path = get_db_path()
+    allow_inline = False
     row = None
-    col_names = []
+
     try:
-        with DatabaseManager(db_path) as db:
-            cur = db.conn.cursor()
-
-            # figure out columns from the 'images' table
-            cur.execute("PRAGMA table_info(images)")
-            table_info = cur.fetchall()
-            col_names = [t[1] for t in table_info]  # 'name' is t[1]
-
-            cur.execute("SELECT * FROM images WHERE image_id=?", (image_id,))
-            row = cur.fetchone()
-
+        row = fetch_image_record(db_path, image_id)
     except DatabaseError as e:
-        flash(f"Database error: {e}", "error")
+        flash(f"Database error while fetching image_id '{image_id}': {e}", "error")
         return redirect(url_for("admin_list_images"))
 
     if not row:
-        flash("Image not found in DB.", "warning")
+        flash(f"No database record found for image_id '{image_id}'.", "warning")
         return redirect(url_for("admin_list_images"))
-    
-    # 'row' is a tuple of columns, col_names is a list of column names
-    # We pass both to the template
+
+    # Get column names so we can locate file_path in the row
+    col_names = []
+    try:
+        with DatabaseManager(db_path) as db:
+            c2 = db.conn.cursor()
+            c2.execute("PRAGMA table_info(images)")
+            table_info = c2.fetchall()
+            col_names = [t[1] for t in table_info]
+    except DatabaseError as e:
+        flash(f"Database error while reading table structure for image '{image_id}': {e}", "error")
+        return redirect(url_for("admin_list_images"))
+
+    file_path = None
+    if "file_path" in col_names:
+        fp_index = col_names.index("file_path")
+        file_path = row[fp_index]
+        if file_path:
+            # guess MIME
+            mime_type, _ = mimetypes.guess_type(file_path.lower())
+            if mime_type in INLINE_IMAGE_TYPES:
+                allow_inline = True
+    else:
+        flash("The 'file_path' column is missing in 'images' table.", "warning")
+
     return render_template(
         "admin_image_detail.html",
         image_id=image_id,
         row=row,
-        col_names=col_names
+        col_names=col_names,
+        allow_inline=allow_inline
     )
 
 @app.route("/admin/thumbnail/<int:image_id>")
-@admin_required
 def admin_thumbnail(image_id):
+    """
+    Serves a thumbnail (PNG) for the specified image_id if it exists.
+    """
     thumb_dir = get_thumbnails_dir()
     thumbnail_file = os.path.join(thumb_dir, f"{image_id}.png")
+
     if not os.path.exists(thumbnail_file):
-        return "No thumbnail", 404
+        # Return a plain text 404 or do 'return send_file(...)' of a placeholder
+        return f"No thumbnail found for image_id '{image_id}' at '{thumbnail_file}'", 404
+
     return send_file(thumbnail_file, mimetype="image/png")
+
+@app.route("/admin/full_image/<int:image_id>")
+def admin_full_image(image_id):
+    """
+    Serves the full-size image file for a given image record,
+    attempting inline display if the format is browser-friendly,
+    else forcing download.
+    """
+    db_path = get_db_path()
+    try:
+        file_path = fetch_file_path(db_path, image_id)
+    except DatabaseError as e:
+        flash(f"Database error fetching file path for image '{image_id}': {e}", "error")
+        return redirect(url_for("admin_image_detail", image_id=image_id))
+
+    if not file_path:
+        flash(f"No file_path found in DB for image_id '{image_id}'.", "error")
+        return redirect(url_for("admin_image_detail", image_id=image_id))
+
+    if not os.path.exists(file_path):
+        flash(f"File does not exist on disk: '{file_path}'.", "error")
+        return redirect(url_for("admin_image_detail", image_id=image_id))
+
+    # Guess MIME
+    mime_type, _ = mimetypes.guess_type(file_path.lower())
+    if not mime_type:
+        mime_type = "application/octet-stream"
+
+    allow_inline = mime_type in INLINE_IMAGE_TYPES
+
+    response = send_file(
+        file_path,
+        mimetype=mime_type,
+        as_attachment=not allow_inline  # Force download if not inline-friendly
+    )
+    disposition = "inline" if allow_inline else "attachment"
+    response.headers["Content-Disposition"] = f'{disposition}; filename="{os.path.basename(file_path)}"'
+    return response
 
 # -------------------------------------------------------------------------
 # TRIGGER INGESTION (EXAMPLE)
