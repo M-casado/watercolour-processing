@@ -7,13 +7,28 @@
     <small>Page {{ page }} of {{ total_pages }} (Total: {{ total_count }})</small>
   </div>
   <div>
+    <!-- FIRST: green-ish outline style -->
+    <a class="btn btn-sm btn-outline-success {% if page <= 1 %}disabled{% endif %}"
+       href="{% if page > 1 %}?filename={{ filename_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&page=1&per_page={{ per_page }}{% else %}#{% endif %}">
+      First
+    </a>
+
+    <!-- PREV: blue-ish outline style -->
     <a class="btn btn-sm btn-outline-primary {% if page <= 1 %}disabled{% endif %}"
-       href="{% if page > 1 %}?filename={{ filename_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page-1 }}&per_page={{ per_page }}&is_raw={{ is_raw_filter }}&cropped={{ cropped_filter }}{% else %}#{% endif %}">
+       href="{% if page > 1 %}?filename={{ filename_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page-1 }}&per_page={{ per_page }}{% else %}#{% endif %}">
       Prev
     </a>
+
+    <!-- NEXT: blue-ish outline style -->
     <a class="btn btn-sm btn-outline-primary {% if page >= total_pages %}disabled{% endif %}"
-       href="{% if page < total_pages %}?filename={{ filename_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page+1 }}&per_page={{ per_page }}&is_raw={{ is_raw_filter }}&cropped={{ cropped_filter }}{% else %}#{% endif %}">
+       href="{% if page < total_pages %}?filename={{ filename_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page+1 }}&per_page={{ per_page }}{% else %}#{% endif %}">
       Next
+    </a>
+
+    <!-- LAST: red-ish outline style -->
+    <a class="btn btn-sm btn-outline-danger {% if page >= total_pages %}disabled{% endif %}"
+       href="{% if page < total_pages %}?filename={{ filename_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ total_pages }}&per_page={{ per_page }}{% else %}#{% endif %}">
+      Last
     </a>
   </div>
 </div>
