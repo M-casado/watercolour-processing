@@ -82,31 +82,34 @@ def ingest_raw_images(
     with DatabaseManager(db_path, schema_path) as db:
 
         def _process_file(file_path: str):
-            ext = os.path.splitext(file_path)[1].lower()
+            # Convert the given file path to an absolute path, in case a relative path was given
+            abs_path = os.path.abspath(file_path)
+
+            ext = os.path.splitext(abs_path)[1].lower()
             if ext not in extensions:
-                logger.info(f"Skipping '{file_path}' (unsupported extension: '{ext}' not in {extensions})")
+                logger.info(f"Skipping '{abs_path}' (unsupported extension: '{ext}' not in {extensions})")
                 return
 
             stats["scanned"] += 1
-            md5 = compute_md5(file_path)
-            exif_date = extract_exif_date(file_path)
-            filename = os.path.basename(file_path)
+            md5 = compute_md5(abs_path)
+            exif_date = extract_exif_date(abs_path)
+            filename = os.path.basename(abs_path)
 
-            logger.debug(f"Processing '{file_path}' (MD5={md5}, exif_date={exif_date})")
+            logger.debug(f"Processing '{abs_path}' (MD5={md5}, exif_date={exif_date})")
             try:
                 image_id = db.insert_image(
                     filename=filename,
-                    file_path=file_path,
+                    file_path=abs_path,   # Storing absolute path instead of file_path
                     md5_checksum=md5,
                     date_taken=exif_date,
                     pipeline_version=pipeline_version
                 )
-                create_thumbnail(file_path, image_id)
+                create_thumbnail(abs_path, image_id)
                 stats["inserted"] += 1
-                logger.info(f"Inserted new image: {file_path}")
+                logger.info(f"Inserted new image: {abs_path}")
             except DuplicateImageError:
                 stats["duplicates"] += 1
-                logger.warning(f"Duplicate MD5 found for '{file_path}', skipping.")
+                logger.warning(f"Duplicate MD5 found for '{abs_path}', skipping.")
 
         def _process_path(path: str):
             if os.path.isfile(path):
