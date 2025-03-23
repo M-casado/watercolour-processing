@@ -13,8 +13,8 @@ from PIL import Image
 
 from watercolour_processing.logging_config import get_logger
 from watercolour_processing.database.db_manager import DatabaseManager, DuplicateImageError
+from watercolour_processing.utils import get_db_path, get_thumbnails_dir, get_db_schema_path, get_data_raw_path, get_pipeline_version
 
-THUMB_DIR = "data/thumbnails"
 logger = get_logger(__name__)
 
 def compute_md5(file_path: str) -> str:
@@ -127,12 +127,13 @@ def ingest_raw_images(
 
 def create_thumbnail(full_image_path: str, image_id: int):
     """
-    Creates a small 200px-wide thumbnail in THUMB_DIR with name {image_id}.png
+    Creates a small 200px-wide thumbnail in thumb_dir with name {image_id}.png
     """
-    if not os.path.exists(THUMB_DIR):
-        os.makedirs(THUMB_DIR, exist_ok=True)
+    thumb_dir = get_thumbnails_dir()
+    if not os.path.exists(thumb_dir):
+        os.makedirs(thumb_dir, exist_ok=True)
 
-    thumbnail_path = os.path.join(THUMB_DIR, f"{image_id}.png")
+    thumbnail_path = os.path.join(thumb_dir, f"{image_id}.png")
     with Image.open(full_image_path) as img:
         img.thumbnail((200, 200))  # 200 px wide, aspect ratio
         img.save(thumbnail_path, "PNG")
@@ -149,24 +150,24 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--db",
-        default="data/watercolours.db",
+        default=get_db_path(),
         help="Path to the SQLite DB file (e.g. 'data/watercolours.db')."
     )
     parser.add_argument(
         "--schema",
-        default="src/watercolour_processing/database/db_schema.sql",
+        default=get_db_schema_path(),
         help="Optional path to db_schema.sql if the DB schema may need applying (e.g. 'src/watercolour_processing/database/db_schema.sql')."
     )
     parser.add_argument(
         "--extensions",
         nargs="*", # zero or more arguments
         default=[],
-        help="List of file extensions to process (default is an empty list, e.g. all image formats will be picked)."
+        help="List of file extensions (e.g., ['.nef', '.png']) to process (default is an empty list, where all image formats will be picked)."
     )
     parser.add_argument(
         "--pipeline_version",
-        default="v0.1.0",
-        help="Pipeline version string to record in DB (default: v0.1.0)."
+        default=get_pipeline_version(),
+        help="Pipeline version string to record in DB (e.g., v0.1.0)."
     )
     parser.add_argument(
         "paths",

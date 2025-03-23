@@ -58,3 +58,9 @@ def get_data_raw_path():
     """
     repo_root = get_repo_root()
     return os.path.join(repo_root, "data", "raw")
+
+def get_pipeline_version():
+    """
+    Returns the current pipeline version as a string.
+    """
+    return "v0.1.0"
