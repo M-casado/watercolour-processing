@@ -67,8 +67,14 @@ def ingest_raw_images(
     Returns:
         A summary dict with counts of scanned, inserted, duplicates, and total paths.
     """
+    all_image_extensions = [".nef", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".gif", ".bmp", ".webp", ".heic", ".heif", ".raw"]
     if extensions is None:
-        extensions = [".nef"]
+        extensions = all_image_extensions
+    elif type(extensions) is list:
+        print(extensions)
+        print(len(extensions))
+        if len(extensions) == 0:
+            extensions = all_image_extensions
 
     stats = {"scanned": 0, "inserted": 0, "duplicates": 0, "total_paths": len(paths)}
     logger.info(f"Starting ingestion with paths={paths}")
@@ -78,6 +84,7 @@ def ingest_raw_images(
         def _process_file(file_path: str):
             ext = os.path.splitext(file_path)[1].lower()
             if ext not in extensions:
+                logger.info(f"Skipping '{file_path}' (unsupported extension: '{ext}' not in {extensions})")
                 return
 
             stats["scanned"] += 1
@@ -152,9 +159,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--extensions",
-        nargs='+',
-        default=[".nef"],
-        help="List of file extensions to process (default is ['.nef'])."
+        nargs="*", # zero or more arguments
+        default=[],
+        help="List of file extensions to process (default is an empty list, e.g. all image formats will be picked)."
     )
     parser.add_argument(
         "--pipeline_version",
