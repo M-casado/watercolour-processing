@@ -1,21 +1,41 @@
 {% extends "base.html" %}
 {% block content %}
 
+<!-- Top row: Title, possibly Full Image button(s), Edit / Save / Cancel, and Back to List -->
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="m-0">Image Detail (ID: {{ image_id }})</h4>
   <div>
+    <!-- See or Download Full Image logic remains unchanged -->
     {% if allow_inline %}
       <a href="{{ url_for('admin_full_image', image_id=image_id) }}"
-        class="btn btn-sm btn-info"
-        target="_blank">See Full Image</a>
+         class="btn btn-sm btn-info"
+         target="_blank">See Full Image</a>
     {% else %}
       <a href="{{ url_for('admin_full_image', image_id=image_id) }}"
-        class="btn btn-sm btn-warning">
-        Download Full Image</a>
+         class="btn btn-sm btn-warning">
+        Download Full Image
+      </a>
     {% endif %}
 
-    <!-- Link back to listing preserving filters/pages -->
-    <a class="btn btn-sm btn-secondary"
+    <!-- If not editing, show an "Edit Fields" button, linking with ?edit=1 -->
+    <!-- If editing, we won't show "Edit Fields" but will show "Save / Cancel" below in the form -->
+    {% if not is_edit_mode %}
+      <a class="btn btn-sm btn-warning ms-2"
+         href="{{ url_for('admin_image_detail',
+                          image_id=image_id,
+                          edit='1',
+                          filename=request.args.get('filename',''),
+                          date_from=request.args.get('date_from',''),
+                          date_to=request.args.get('date_to',''),
+                          page=request.args.get('page',1),
+                          per_page=request.args.get('per_page',20),
+                          is_raw=request.args.get('is_raw',''),
+                          cropped=request.args.get('cropped',''),
+                          rotated=request.args.get('rotated','')) }}">
+        Edit Fields
+      </a>
+    {% endif %}
+    <a class="btn btn-sm btn-secondary ms-2"
        href="{{ url_for('admin_list_images',
                         filename=request.args.get('filename',''),
                         date_from=request.args.get('date_from',''),
@@ -30,30 +50,94 @@
   </div>
 </div>
 
+<!-- If row & col_names exist, show the thumbnail & table -->
 {% if row and col_names %}
+  <!-- Show a thumbnail if you'd like -->
   <div class="mb-3">
-    <img src="{{ url_for('admin_thumbnail', image_id=row[0]) }}"
+    <img src="{{ url_for('admin_thumbnail', image_id=image_id) }}"
          alt="thumbnail"
          class="img-fluid img-thumbnail"
          style="max-width: 300px;" />
   </div>
 
-  <table class="table table-bordered">
-    <thead>
-      <tr>
-        <th>Column</th>
-        <th>Value</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for col_name in col_names %}
-      <tr>
-        <td>{{ col_name }}</td>
-        <td>{{ row[loop.index0] }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <!-- If is_edit_mode, wrap the entire table in a <form method="POST"> -->
+  {% if is_edit_mode %}
+  <form method="POST" class="mb-3">
+  {% endif %}
+
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          <th>Column</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for col_name in col_names %}
+        <tr>
+          <td>{{ col_name }}</td>
+          <td>
+            {% set value = row[loop.index0] %}  <!-- row is a tuple, so index matches loop index -->
+            {# Alternatively: row[col_names.index(col_name)] if you prefer #}
+
+            {# Decide if the column is editable #}
+            {% if col_name in ["is_raw", "date_taken", "order_in_batch",
+                               "pipeline_version", "flash_missing", "cropped"] %}
+              {% if is_edit_mode %}
+                {# We show <input> or <checkbox> depending on the column #}
+                {% if col_name == "is_raw" %}
+                  <input type="checkbox" name="is_raw" value="1"
+                    {% if value == 1 %}checked{% endif %}>
+                {% elif col_name == "flash_missing" %}
+                  <input type="checkbox" name="flash_missing" value="1"
+                    {% if value == 1 %}checked{% endif %}>
+                {% elif col_name == "cropped" %}
+                  <input type="checkbox" name="cropped" value="1"
+                    {% if value == 1 %}checked{% endif %}>
+                {% elif col_name == "order_in_batch" %}
+                  <input type="number" class="form-control form-control-sm"
+                         name="order_in_batch"
+                         value="{{ value|default('') }}">
+                {% elif col_name == "pipeline_version" %}
+                  <input type="text" class="form-control form-control-sm"
+                         name="pipeline_version"
+                         value="{{ value|default('') }}">
+                {% elif col_name == "date_taken" %}
+                  <input type="text" class="form-control form-control-sm"
+                         name="date_taken"
+                         placeholder="YYYY-MM-DDTHH:MM:SS"
+                         value="{{ value|default('') }}">
+                {% endif %}
+              {% else %}
+                {# Not in edit mode => just show read-only text #}
+                {{ value if value is not none else "None" }}
+              {% endif %}
+            {% else %}
+              {# Non-editable columns => always read-only #}
+              {{ value if value is not none else "None" }}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if is_edit_mode %}
+      <button type="submit" class="btn btn-primary">Save Changes</button>
+      <a href="{{ url_for('admin_image_detail', image_id=image_id,
+                           filename=request.args.get('filename',''),
+                           date_from=request.args.get('date_from',''),
+                           date_to=request.args.get('date_to',''),
+                           page=request.args.get('page',1),
+                           per_page=request.args.get('per_page',20),
+                           is_raw=request.args.get('is_raw',''),
+                           cropped=request.args.get('cropped',''),
+                           rotated=request.args.get('rotated','')) }}"
+         class="btn btn-secondary">Cancel</a>
+    </form>
+    {% endif %}
+  {# end if is_edit_mode #}
+
 {% else %}
   <div class="alert alert-warning">No data found for this image.</div>
 {% endif %}

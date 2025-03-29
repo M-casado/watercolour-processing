@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS images (
     parent_image_id    INTEGER,            -- if this is derived from another image
     date_taken         TEXT CHECK (date_taken GLOB '????-??-??T??:??:??'),
     order_in_batch     INTEGER,
-    pipeline_version   TEXT,
+    pipeline_version   TEXT CHECK (pipeline_version GLOB 'v[0-9]*[.][0-9]*[.][0-9]*'),
     flash_missing      INTEGER DEFAULT 0,
     cropped            INTEGER DEFAULT 0,
     cropped_date       TEXT CHECK (cropped_date GLOB '????-??-??T??:??:??'),
@@ -39,8 +39,8 @@ CREATE TABLE IF NOT EXISTS paintings (
     description   TEXT,
     explicit_year INTEGER CHECK (explicit_year BETWEEN 1900 AND 2050),
     inferred_year INTEGER CHECK (inferred_year BETWEEN 1900 AND 2050),
-    personal_favourite     INTEGER DEFAULT 0
-    last_changed       TEXT CHECK (rotated_date GLOB '????-??-??T??:??:??'),
+    personal_favourite     INTEGER DEFAULT 0,
+    last_changed       TEXT CHECK (last_changed GLOB '????-??-??T??:??:??')
 );
 
 ----------------------------

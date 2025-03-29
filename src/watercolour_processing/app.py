@@ -220,15 +220,82 @@ def fetch_file_path(db_path, image_id):
         row = cur.fetchone()
         return row[0] if row else None
 
-@app.route("/admin/image/<int:image_id>")
+from datetime import datetime
+
+@app.route("/admin/image/<int:image_id>", methods=["GET", "POST"])
+@admin_required
 def admin_image_detail(image_id):
     """
-    Shows details for a single image, including whether it can be displayed inline.
+    Displays the details of a single image. By default in read-only mode.
+    If the user appends ?edit=1 in the URL, the page is in edit mode (GET).
+    If the user submits the form (POST), we update the editable fields
+    and redirect back to read-only mode.
     """
+
     db_path = get_db_path()
+
+    # 1) If POST -> user clicked "Save Changes" in edit mode
+    if request.method == "POST":
+        # Extract form data for the six editable fields
+        # Defaulting checkboxes to "0" if not present
+        is_raw_val = request.form.get("is_raw", "0")
+        date_taken_val = request.form.get("date_taken", None)
+        order_in_batch_val = request.form.get("order_in_batch", None)
+        pipeline_version_val = request.form.get("pipeline_version", "")
+        flash_missing_val = request.form.get("flash_missing", "0")
+        cropped_val = request.form.get("cropped", "0")
+
+        # Convert booleans/ints
+        is_raw_val = int(is_raw_val)
+        flash_missing_val = int(flash_missing_val)
+        cropped_val = int(cropped_val)
+        order_in_batch_val = int(order_in_batch_val) if order_in_batch_val else None
+        now_str = datetime.now().isoformat(timespec='seconds')
+
+        # Perform DB update
+        update_sql = """
+            UPDATE images
+               SET is_raw = ?,
+                   date_taken = ?,
+                   order_in_batch = ?,
+                   pipeline_version = ?,
+                   flash_missing = ?,
+                   cropped = ?,
+                   last_changed = ?
+             WHERE image_id = ?
+        """
+
+        try:
+            with DatabaseManager(db_path) as db:
+                cur = db.conn.cursor()
+                cur.execute(
+                    update_sql,
+                    (
+                        is_raw_val,
+                        date_taken_val,
+                        order_in_batch_val,
+                        pipeline_version_val,
+                        flash_missing_val,
+                        cropped_val,
+                        now_str,
+                        image_id
+                    )
+                )
+                db.conn.commit()
+            flash("Image fields updated successfully.", "success")
+
+        except DatabaseError as e:
+            flash(f"Error updating image fields for image_id='{image_id}': {e}", "error")
+
+        # After saving, redirect to read-only detail view (no ?edit=1)
+        return redirect(url_for("admin_image_detail", image_id=image_id))
+
+    # 2) If GET -> either read-only or edit mode, depending on ?edit=1
+    is_edit_mode = (request.args.get("edit") == "1")
     allow_inline = False
     row = None
 
+    # 2a) Fetch the row from the DB
     try:
         row = fetch_image_record(db_path, image_id)
     except DatabaseError as e:
@@ -239,7 +306,7 @@ def admin_image_detail(image_id):
         flash(f"No database record found for image_id '{image_id}'.", "warning")
         return redirect(url_for("admin_list_images"))
 
-    # Get column names so we can locate file_path in the row
+    # 2b) Get column names
     col_names = []
     try:
         with DatabaseManager(db_path) as db:
@@ -251,24 +318,27 @@ def admin_image_detail(image_id):
         flash(f"Database error while reading table structure for image '{image_id}': {e}", "error")
         return redirect(url_for("admin_list_images"))
 
+    # 2c) Check if we can display the image inline
     file_path = None
     if "file_path" in col_names:
+        # We assume row is a tuple, so find the index of "file_path"
         fp_index = col_names.index("file_path")
         file_path = row[fp_index]
         if file_path:
-            # guess MIME
             mime_type, _ = mimetypes.guess_type(file_path.lower())
             if mime_type in INLINE_IMAGE_TYPES:
                 allow_inline = True
     else:
         flash("The 'file_path' column is missing in 'images' table.", "warning")
 
+    # 2d) Render the detail template, passing 'is_edit_mode' to show the form if needed
     return render_template(
         "admin_image_detail.html",
         image_id=image_id,
         row=row,
         col_names=col_names,
-        allow_inline=allow_inline
+        allow_inline=allow_inline,
+        is_edit_mode=is_edit_mode  # indicates whether we show <input> or read-only
     )
 
 @app.route("/admin/thumbnail/<int:image_id>")
