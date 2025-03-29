@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS images (
     cropped_date       TEXT CHECK (cropped_date GLOB '????-??-??T??:??:??'),
     rotation_degrees   INTEGER DEFAULT 0 CHECK (rotation_degrees BETWEEN 0 AND 360),
     rotated_date       TEXT CHECK (rotated_date GLOB '????-??-??T??:??:??'),
+    last_changed       TEXT CHECK (rotated_date GLOB '????-??-??T??:??:??'),
     embedded_images    INTEGER DEFAULT 0,
     FOREIGN KEY (parent_image_id)
        REFERENCES images(image_id)
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS paintings (
     explicit_year INTEGER CHECK (explicit_year BETWEEN 1900 AND 2050),
     inferred_year INTEGER CHECK (inferred_year BETWEEN 1900 AND 2050),
     personal_favourite     INTEGER DEFAULT 0
+    last_changed       TEXT CHECK (rotated_date GLOB '????-??-??T??:??:??'),
 );
 
 ----------------------------
